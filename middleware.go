@@ -171,6 +171,10 @@ func (m *MessageStore) Handler(next http.Handler) http.Handler {
 
 		w.Write(buf)
 
+		if !m.config.appFilterFn(r) {
+			return
+		}
+
 		msg := message{
 			CreatedAt: time.Now().Unix(),
 			App:       m.config.appIDFn(r),
