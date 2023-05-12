@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +24,8 @@ type AppIDFn func(r *http.Request) string
 // function type to be selective of which messages are recorded
 type AppFilterMessageFn func(r *http.Request) bool
 
+var defaultHeadersToStrip = []string{"Authorization"}
+
 func defaultFilterFn(_ *http.Request) bool { return true }
 
 type middlewareConfig struct {
@@ -32,6 +35,7 @@ type middlewareConfig struct {
 	numberOfMessagesBeforePublishing int64
 	ipStrategy                       IPStrategy
 	apiKey                           string
+	headersToStrip                   []string
 }
 
 type messageHTTPDefinition struct {
@@ -62,6 +66,7 @@ func New(opts ...Option) (*MessageStore, error) {
 			client:                           client,
 			apiKey:                           "",
 			appFilterFn:                      defaultFilterFn,
+			headersToStrip:                   defaultHeadersToStrip,
 		},
 	}
 
@@ -82,6 +87,10 @@ type MessageStore struct {
 	config   middlewareConfig
 }
 
+func maskLeft(s string) string {
+	return strings.Repeat("*", 15)
+}
+
 func (m *MessageStore) flush() error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -97,6 +106,12 @@ func (m *MessageStore) flush() error {
 
 	for _, v := range m.messages {
 		c := int32(v.CreatedAt)
+
+		for _, value := range m.config.headersToStrip {
+			for hdKey, headerValue := range v.Request.Header[value] {
+				v.Request.Header[value][hdKey] = maskLeft(headerValue)
+			}
+		}
 
 		msg.Messages = append(msg.Messages, otito.ServerMessageRequestMessagesInner{
 			App:       &v.App,

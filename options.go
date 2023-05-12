@@ -31,3 +31,9 @@ func WithAPIKey(s string) Option {
 		ms.config.apiKey = s
 	}
 }
+
+func WithHeadersToStrip(s []string) Option {
+	return func(ms *MessageStore) {
+		ms.config.headersToStrip = s
+	}
+}
