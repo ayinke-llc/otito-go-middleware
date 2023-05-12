@@ -3,7 +3,7 @@ package otito
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,60 +11,80 @@ import (
 	"time"
 
 	otito "github.com/ayinke-llc/otito-go"
+	"github.com/ayinke-llc/otito-go-middleware/util"
 )
 
 // used to retrieve the ID of the app
 type AppIDFn func(r *http.Request) string
 
-type MiddlewareConfig struct {
+// used to determine if we should add this message.
+// Sometimes, you want to only set this log for a select few users
+// By default, all messages are recorded. Implement your logic with this
+// function type to be selective of which messages are recorded
+type AppFilterMessageFn func(r *http.Request) bool
+
+func defaultFilterFn(_ *http.Request) bool { return true }
+
+type middlewareConfig struct {
 	appIDFn                          AppIDFn
+	appFilterFn                      AppFilterMessageFn
 	client                           *otito.APIClient
 	numberOfMessagesBeforePublishing int64
 	ipStrategy                       IPStrategy
-	ingesterURL                      string
 	apiKey                           string
 }
 
-type MessageHTTPDefinition struct {
+type messageHTTPDefinition struct {
 	Header map[string][]string `json:"header"`
 	Body   string              `json:"body"`
 }
 
-type Message struct {
+type message struct {
 	CreatedAt int64                 `json:"created_at"`
 	App       string                `json:"app"`
-	Request   MessageHTTPDefinition `json:"request"`
-	Response  MessageHTTPDefinition `json:"response"`
+	Request   messageHTTPDefinition `json:"request"`
+	Response  messageHTTPDefinition `json:"response"`
 	IPAddress string                `json:"ip_address"`
 }
 
-func New(apiKey string, ingesterURL string, fn AppIDFn, numberOfMessagesBeforePublishing int64, ipstrat IPStrategy) *MessageStore {
+func New(opts ...Option) (*MessageStore, error) {
 	cfg := otito.NewConfiguration()
 
 	client := otito.NewAPIClient(cfg)
 
-	return &MessageStore{
-		messages: make([]Message, 0),
+	msg := &MessageStore{
+		messages: make([]message, 0),
 		mutex:    sync.RWMutex{},
-		config: MiddlewareConfig{
-			appIDFn:                          fn,
-			numberOfMessagesBeforePublishing: numberOfMessagesBeforePublishing,
-			ipStrategy:                       ipstrat,
+		config: middlewareConfig{
+			appIDFn:                          func(r *http.Request) string { return "" },
+			numberOfMessagesBeforePublishing: 100,
+			ipStrategy:                       ForwardedOrRealIPStrategy,
 			client:                           client,
-			apiKey:                           apiKey,
+			apiKey:                           "",
+			appFilterFn:                      defaultFilterFn,
 		},
 	}
+
+	for _, opt := range opts {
+		opt(msg)
+	}
+
+	if util.IsStringEmpty(msg.config.apiKey) {
+		return nil, errors.New("please provide an api key")
+	}
+
+	return msg, nil
 }
 
 type MessageStore struct {
-	messages []Message
+	messages []message
 	mutex    sync.RWMutex
-	config   MiddlewareConfig
+	config   middlewareConfig
 }
 
 func (m *MessageStore) flush() error {
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
 	ctx := context.WithValue(context.Background(), otito.ContextAPIKeys, map[string]otito.APIKey{
 		"ApiKeyAuth": {
@@ -96,22 +116,22 @@ func (m *MessageStore) flush() error {
 	status, resp, err := m.config.client.MessageApi.MessagesPost(ctx).
 		Message(*msg).Execute()
 	if err != nil {
-		panic("oops")
+		return err
 	}
 
-	if resp.StatusCode > http.StatusContinue {
-		panic("oops")
+	if resp.StatusCode > http.StatusAccepted {
+		return err
 	}
 
-	fmt.Println(status)
 	if !status.GetStatus() {
-		panic("oops")
+		return errors.New("an error occurred")
 	}
 
+	m.messages = make([]message, 0)
 	return nil
 }
 
-func (m *MessageStore) add(msg Message) {
+func (m *MessageStore) add(msg message) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -121,6 +141,8 @@ func (m *MessageStore) add(msg Message) {
 		go m.flush()
 	}
 }
+
+func (m *MessageStore) Close() error { return m.flush() }
 
 func (m *MessageStore) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -138,9 +160,9 @@ func (m *MessageStore) Handler(next http.Handler) http.Handler {
 
 		_, err := io.Copy(b, r.Body)
 		if err != nil {
-			// remove this rubbish
-			// TODO(adelowo): please ffs
-			panic("oops")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{"status":false, "message":"internal error"}`))
+			return
 		}
 
 		w.WriteHeader(rec.Code)
@@ -149,20 +171,20 @@ func (m *MessageStore) Handler(next http.Handler) http.Handler {
 
 		w.Write(buf)
 
-		msg := Message{
+		msg := message{
 			CreatedAt: time.Now().Unix(),
 			App:       m.config.appIDFn(r),
 			IPAddress: getIP(r, m.config.ipStrategy),
-			Request: MessageHTTPDefinition{
+			Request: messageHTTPDefinition{
 				Header: r.Header.Clone(),
 				Body:   b.String(),
 			},
-			Response: MessageHTTPDefinition{
+			Response: messageHTTPDefinition{
 				Header: rec.Header().Clone(),
 				Body:   string(buf),
 			},
 		}
 
-		m.add(msg)
+		go m.add(msg)
 	})
 }
