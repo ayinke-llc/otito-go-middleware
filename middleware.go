@@ -44,11 +44,14 @@ type messageHTTPDefinition struct {
 }
 
 type message struct {
-	CreatedAt int64                 `json:"created_at"`
-	App       string                `json:"app"`
-	Request   messageHTTPDefinition `json:"request"`
-	Response  messageHTTPDefinition `json:"response"`
-	IPAddress string                `json:"ip_address"`
+	CreatedAt  int64                 `json:"created_at"`
+	App        string                `json:"app"`
+	Request    messageHTTPDefinition `json:"request"`
+	Response   messageHTTPDefinition `json:"response"`
+	IPAddress  string                `json:"ip_address"`
+	Path       string                `json:"path"`
+	Method     string                `json:"method"`
+	StatusCode int                   `json:"status_code"`
 }
 
 func New(opts ...Option) (*MessageStore, error) {
@@ -113,7 +116,8 @@ func (m *MessageStore) flush() error {
 			}
 		}
 
-		msg.Messages = append(msg.Messages, otito.ServerMessageRequestMessagesInner{
+		var ss int32 = int32(v.StatusCode)
+		msg.Messages = append(msg.Messages, otito.ServerMRequest{
 			App:       &v.App,
 			CreatedAt: &c,
 			IpAddress: &v.IPAddress,
@@ -125,6 +129,9 @@ func (m *MessageStore) flush() error {
 				Body:   &v.Response.Body,
 				Header: &v.Response.Header,
 			},
+			Method:     &v.Method,
+			Path:       &v.Path,
+			StatusCode: &ss,
 		})
 	}
 
@@ -164,20 +171,11 @@ func (m *MessageStore) Handler(next http.Handler) http.Handler {
 
 		rec := httptest.NewRecorder()
 
+		r.Body = io.NopCloser(r.Body)
+
 		next.ServeHTTP(rec, r)
 		for k, v := range rec.Header() {
 			w.Header()[k] = v
-		}
-
-		r.Body = io.NopCloser(r.Body)
-
-		b := bytes.NewBuffer(nil)
-
-		_, err := io.Copy(b, r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"status":false, "message":"internal error"}`))
-			return
 		}
 
 		w.WriteHeader(rec.Code)
@@ -187,6 +185,15 @@ func (m *MessageStore) Handler(next http.Handler) http.Handler {
 		w.Write(buf)
 
 		if !m.config.appFilterFn(r) {
+			return
+		}
+
+		b := bytes.NewBuffer(nil)
+
+		_, err := io.Copy(b, r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{"status":false, "message":"internal error"}`))
 			return
 		}
 
@@ -202,6 +209,9 @@ func (m *MessageStore) Handler(next http.Handler) http.Handler {
 				Header: rec.Header().Clone(),
 				Body:   string(buf),
 			},
+			Path:       r.URL.Path,
+			Method:     r.Method,
+			StatusCode: rec.Code,
 		}
 
 		go m.add(msg)

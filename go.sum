@@ -2,6 +2,8 @@ github.com/ayinke-llc/otito-go v0.0.0-20230512100532-ab7122eadcc8 h1:/F8bCKdvgsO
 github.com/ayinke-llc/otito-go v0.0.0-20230512100532-ab7122eadcc8/go.mod h1:e+DME7CeN0RBSMLFGXRClj9NMXjY7Kq5wHGCAGtGqBc=
 github.com/ayinke-llc/otito-go v0.0.0-20230512113535-5f2bc5827227 h1:wyNUnXp+gt2LooZD4zLgz55m9yuBXg7k29uWVXgwx2g=
 github.com/ayinke-llc/otito-go v0.0.0-20230512113535-5f2bc5827227/go.mod h1:e+DME7CeN0RBSMLFGXRClj9NMXjY7Kq5wHGCAGtGqBc=
+github.com/ayinke-llc/otito-go v0.0.0-20230521210745-5ee99de72dcd h1:AIq8akmAN3to06SJ+RP33zpb/bQ5d+ashD59NQSlLf8=
+github.com/ayinke-llc/otito-go v0.0.0-20230521210745-5ee99de72dcd/go.mod h1:e+DME7CeN0RBSMLFGXRClj9NMXjY7Kq5wHGCAGtGqBc=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
