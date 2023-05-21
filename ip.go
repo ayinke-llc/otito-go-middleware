@@ -16,6 +16,8 @@ const (
 	// Uses the standard X-Forwarded-For or X-Real-IP http header to find
 	// the ip
 	ForwardedOrRealIPStrategy
+	// please don't use this in prod. Maybe when running locally only
+	RemoteHeaderStrategy
 )
 
 func getIP(r *http.Request, strategy IPStrategy) string {
@@ -37,10 +39,10 @@ func getIP(r *http.Request, strategy IPStrategy) string {
 		}
 
 		return r.Header.Get(xRealIP)
+	case RemoteHeaderStrategy:
+		return r.RemoteAddr
 
 	default:
 		return ""
 	}
-
-	return ip
 }
