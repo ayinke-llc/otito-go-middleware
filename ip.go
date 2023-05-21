@@ -22,8 +22,6 @@ const (
 
 func getIP(r *http.Request, strategy IPStrategy) string {
 
-	var ip string
-
 	switch strategy {
 	case CloudflareStrategy:
 		return r.Header.Get(http.CanonicalHeaderKey("CF-Connecting-IP"))
