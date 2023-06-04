@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -171,7 +171,20 @@ func (m *MessageStore) Handler(next http.Handler) http.Handler {
 
 		rec := httptest.NewRecorder()
 
-		r.Body = io.NopCloser(r.Body)
+		// 25MB max
+		r.Body = http.MaxBytesReader(w, r.Body, 1024*1024*(25))
+
+		bodyBytes, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{"status":false, "message":"internal error"}`))
+			return
+		}
+
+		r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		// close here since we put this in a no closer
+		defer r.Body.Close()
 
 		next.ServeHTTP(rec, r)
 		for k, v := range rec.Header() {
@@ -188,22 +201,13 @@ func (m *MessageStore) Handler(next http.Handler) http.Handler {
 			return
 		}
 
-		b := bytes.NewBuffer(nil)
-
-		_, err := io.Copy(b, r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"status":false, "message":"internal error"}`))
-			return
-		}
-
 		msg := message{
 			CreatedAt: time.Now().Unix(),
 			App:       m.config.appIDFn(r),
 			IPAddress: getIP(r, m.config.ipStrategy),
 			Request: messageHTTPDefinition{
 				Header: r.Header.Clone(),
-				Body:   b.String(),
+				Body:   string(bodyBytes),
 			},
 			Response: messageHTTPDefinition{
 				Header: rec.Header().Clone(),
