@@ -3,7 +3,7 @@ module github.com/ayinke-llc/otito-go-middleware
 go 1.19
 
 require (
-	github.com/ayinke-llc/otito-go v0.0.0-20230521210745-5ee99de72dcd
+	github.com/ayinke-llc/otito-go v0.0.0-20230604155741-2cc8adcaf1e3
 	github.com/stretchr/testify v1.8.2
 )
 
