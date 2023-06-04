@@ -77,6 +77,10 @@ func New(opts ...Option) (*MessageStore, error) {
 		opt(msg)
 	}
 
+	if msg.config.numberOfMessagesBeforePublishing > 1000 {
+		return nil, errors.New("you can only batch a maximum of 1,000 requests at a time")
+	}
+
 	if util.IsStringEmpty(msg.config.apiKey) {
 		return nil, errors.New("please provide an api key")
 	}

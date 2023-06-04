@@ -46,8 +46,12 @@ func main() {
 			// let's assume you want to skip storing some request
 			return !strings.Contains(r.URL.Path, "auth")
 		}),
+		// CloudflareStrategy or ForwardedOrReadIPStrategy would be a better fit for production apps
 		otitoMiddleware.WithIPStrategy(otitoMiddleware.RemoteHeaderStrategy),
-		otitoMiddleware.WithNumberOfMessagesBeforePublishing(10))
+		// send to api every 100 http requests. This reduces the amount
+		// of external calls you make and batch the data to Otito's ingesters
+		// Maximum is 1,000 at this time
+		otitoMiddleware.WithNumberOfMessagesBeforePublishing(1000))
 
 	if err != nil {
 		panic(err.Error())
