@@ -46,6 +46,9 @@ func main() {
 			// let's assume you want to skip storing some request
 			return !strings.Contains(r.URL.Path, "auth")
 		}),
+		// by default, the Authorization header is masked but you can
+		// configure more
+		otitoMiddleware.WithHeadersToStrip([]string{"Authorization", "Content-Type", "Another sensitive header"}),
 		// CloudflareStrategy or ForwardedOrReadIPStrategy would be a better fit for production apps
 		otitoMiddleware.WithIPStrategy(otitoMiddleware.RemoteHeaderStrategy),
 		// send to api every 100 http requests. This reduces the amount
